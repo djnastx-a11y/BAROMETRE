@@ -1,0 +1,94 @@
+m4 7 8-4 8 4-8 4-8-4Z"/><path d="M4 7v10l8 4 8-4V7"/><path d="M12 11v10"/></svg>`,
+ team:`<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 20c.5-4 2.6-6 5.5-6s5 2 5.5 6"/><path d="M14 15c2.7 0 4.8 1.6 5.5 5"/></svg>`,
+ more:`<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>`,
+ menu:`<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h16"/></svg>`,
+ bell:`<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 7h18s-3 0-3-7"/><path d="M10 19h4"/></svg>`,
+ req:`<svg viewBox="0 0 24 24"><path d="M4 4h16v13H8l-4 3V4Z"/><path d="M8 9h8M8 13h5"/></svg>`
+};
+
+function save(){localStorage.setItem(KEY,JSON.stringify(state));render()}
+function me(){return state.users.find(u=>u.id===state.currentUserId)}
+function admin(){return me()?.role==='admin'}
+function stockWrite(){return ['admin','employee'].includes(me()?.role)}
+function role(r){return r==='admin'?'ADMIN':r==='employee'?'EMPLOYÉ':'EXTRA'}
+function initials(n){return n.split(' ').map(x=>x[0]).join('').slice(0,2)}
+function login(id){state.currentUserId=id;save()}
+function logout(){state.currentUserId=null;save()}
+
+function loginScreen(){
+ return `<div class="login-screen"><div class="login-card"><div class="login-logo"><img src="${LOGO}" alt="Le Baromètre"></div><div class="login-body"><h1>Connexion</h1><p>Planning, équipe et stock du Baromètre.</p>
+    ${state.users.filter(u=>u.active).map(u=>`<div class="login-user"><div><b>${u.name}</b><span>${role(u.role)}</span></div><button class="btn soft" onclick="login('${u.id}')">Entrer</button></div>`).join('')}
+   </div></div></div>`
+}
+
+function quickButton(target,label,icon){
+ return `<button class="quick" onclick="view='${target}';render()"><div class="quick-circle">${icon}</div><span>${label}</span></button>`
+}
+
+function header(){
+ const u=me();
+ return `<div class="ambient"><div class="topline"><button class="menu-btn" onclick="view='more';render()">${icons.menu}</button><div class="logo-box"><img src="${LOGO}" alt="Le Baromètre"></div><button class="bell-btn" onclick="view='more';render()">${icons.bell}</button></div><div class="quick-actions">
+     ${quickButton('planning','Planning',icons.planning)}
+     ${quickButton('stock','Stock',icons.stock)}
+     ${quickButton('team','Équipe',icons.team)}
+     ${quickButton('more','Demandes',icons.req)}
+   </div></div>`
+}
+
+function homePage(){
+ const d=iso(now);
+ const shifts=state.shifts.filter(s=>s.date===d&&s.type==='work');
+ const low=state.stock.filter(p=>+p.qty<=+p.min);
+ const pending=state.requests.filter(r=>r.status==='pending');
+ return `<div class="page active"><div class="section"><div class="stats"><div class="stat"><span>Équipe</span><strong>${shifts.length}</strong><small>aujourd’hui</small></div><div class="stat"><span>Stock bas</span><strong>${low.length}</strong><small>alertes</small></div><div class="stat"><span>Demandes</span><strong>${pending.length}</strong><small>en attente</small></div></div></div><div class="section"><div class="section-head"><div><h2>Aujourd’hui</h2><span>Équipe planifiée</span></div><button class="link-btn" onclick="view='planning';render()">Voir tout</button></div><div class="panel">
+   ${shifts.map(s=>{const u=state.users.find(x=>x.id===s.userId);return `<div class="row"><div class="row-left"><div class="person-avatar ${u?.role==='extra'?'extra':''}">${initials(u?.name||'?')}</div><div><b>${u?.name||'?'}</b><small>${s.note||role(u?.role)}</small></div></div><div class="time">${s.start} · ${s.end}</div></div>`}).join('') || `<div class="row"><small>Aucun shift aujourd’hui.</small></div>`}
+  </div></div><div class="section"><div class="section-head"><div><h2>Stock à surveiller</h2><span>Seuil minimum atteint</span></div><button class="link-btn" onclick="view='stock';render()">Voir stock</button></div><div class="panel">
+   ${low.length?low.map(p=>`<div class="alert"><div class="alert-left"><div class="alert-dot"></div><div><b>${p.name}</b><small>${p.supplier}</small></div></div><div class="qty">${p.qty} ${p.unit}</div></div>`).join(''):`<div class="alert"><div><b>Aucune alerte</b><small>Stock au-dessus des seuils.</small></div></div>`}
+  </div></div></div>`
+}
+
+function planningPage(){
+ const monday=mondayOf(now),days=[0,1,2,3,4,5,6].map(n=>addDays(monday,n));
+ return `<div class="page active"><div class="page-top"><div><h2>Planning</h2><p>Semaine du ${fmt(days[0])} au ${fmt(days[6])}</p></div>${admin()?`<button class="btn gold" onclick="openShift()">+ Shift</button>`:''}</div><div class="seg"><button>Jour</button><button class="active">Semaine</button><button>Mois</button></div><div class="planner-scroll"><div class="planner"><div class="ph">Équipe</div>${days.map(d=>`<div class="ph">${fmt(d)}</div>`).join('')}
+  ${state.users.filter(u=>u.active).map(u=>`
+   <div class="name-cell"><b>${u.name}</b><span>${role(u.role)}</span></div>
+   ${days.map(d=>{const ds=iso(d);const ss=state.shifts.filter(s=>s.userId===u.id&&s.date===ds);return `<div class="day-cell" onclick="${admin()?`openShift('${u.id}','${ds}')`:''}">${ss.map(s=>`<div class="shift ${s.type==='absence'?'absence':u.role==='extra'?'extra':'work'}"><b>${s.type==='absence'?'ABSENCE':`${s.start} · ${s.end}`}</b><small>${s.note||''}</small></div>`).join('')}</div>`}).join('')}
+  `).join('')}
+ </div></div></div>`
+}
+
+function stockPage(){
+ const value=state.stock.reduce((a,p)=>a+(+p.qty*+p.buy),0);
+ return `<div class="page active"><div class="page-top"><div><h2>Stock</h2><p>Inventaire, seuils et commandes</p></div><div>${stockWrite()?`<button class="btn soft" onclick="openInventory()">Inventaire</button>`:''} ${admin()?`<button class="btn gold" onclick="openProduct()">+ Produit</button>`:''}</div></div><div class="stats" style="margin-bottom:12px"><div class="stat"><span>Produits</span><strong>${state.stock.length}</strong><small>références</small></div><div class="stat"><span>Alertes</span><strong>${state.stock.filter(p=>+p.qty<=+p.min).length}</strong><small>sous seuil</small></div><div class="stat"><span>Valeur</span><strong>${value.toFixed(0)}€</strong><small>achat estimé</small></div></div><div class="table-wrap"><table><thead><tr><th>Produit</th><th>Stock</th><th>Seuil</th><th>Fournisseur</th><th>À commander</th><th></th></tr></thead><tbody>
+  ${state.stock.map(p=>`<tr><td><b>${p.name}</b><small>${p.category}</small></td><td class="${+p.qty<=+p.min?'stock-low':'stock-ok'}">${p.qty} ${p.unit}</td><td>${p.min}</td><td>${p.supplier}</td><td>${Math.max(0,+p.min*2-+p.qty)} ${p.unit}</td><td>${stockWrite()?`<button class="mini" onclick="adjustStock('${p.id}')">Ajuster</button>`:''}</td></tr>`).join('')}
+ </tbody></table></div></div>`
+}
+
+function teamPage(){
+ return `<div class="page active"><div class="page-top"><div><h2>Équipe</h2><p>Admins, employés et extras</p></div>${admin()?`<button class="btn gold" onclick="openUser()">+ Ajouter</button>`:''}</div><div class="people-grid">${state.users.map(u=>`<div class="person-card"><div class="person-main"><div class="person-avatar ${u.role==='extra'?'extra':''}">${initials(u.name)}</div><div><b>${u.name}</b><span>${u.active?'Actif':'Inactif'}</span></div></div><span class="role-pill ${u.role}">${role(u.role)}</span></div>`).join('')}</div></div>`
+}
+
+function morePage(){
+ const mine=state.requests.filter(r=>admin()||r.userId===me().id);
+ return `<div class="page active"><div class="page-top"><div><h2>Demandes</h2><p>Disponibilités, absences et remplacements</p></div><button class="btn gold" onclick="openRequest()">+ Demande</button></div><div class="more-grid"><div><div class="section-head"><div><h2>En cours</h2><span>${mine.length} demande(s)</span></div></div><div class="panel">${mine.length?mine.map(r=>{const u=state.users.find(x=>x.id===r.userId);return `<div class="row"><div><b>${u?.name}</b><small>${r.kind} · ${r.date}</small></div><span class="role-pill">${r.status}</span></div>`}).join(''):`<div class="row"><small>Aucune demande.</small></div>`}</div></div><div><div class="section-head"><div><h2>Commandes</h2><span>Selon les seuils</span></div></div><div class="panel">${['COZIGOU','METRO'].map(s=>{const arr=state.stock.filter(p=>p.supplier===s&&+p.qty<=+p.min);return `<div class="row"><div><b>${s}</b><small>${arr.length?arr.map(p=>p.name).join(', '):'Rien à commander'}</small></div><div class="time">${arr.length}</div></div>`}).join('')}</div></div></div></div>`
+}
+
+function nav(){
+ const tabs=[['home','Accueil',icons.home],['planning','Planning',icons.planning],['stock','Stock',icons.stock],['team','Équipe',icons.team],['more','Plus',icons.more]];
+ return `<div class="bottom-nav">${tabs.map(([k,l,i])=>`<button class="nav-btn ${view===k?'active':''}" onclick="view='${k}';render()">${i}<span>${l}</span></button>`).join('')}</div>`
+}
+
+function openShift(userId='',date=''){
+ modal=`<div class="modal-back" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-head"><h3>Nouveau shift</h3><button class="mini" onclick="closeModal()">Fermer</button></div><div class="modal-body"><form class="form-grid" onsubmit="saveShift(event)"><label>Personne<select name="userId">${state.users.filter(u=>u.active).map(u=>`<option value="${u.id}" ${u.id===userId?'selected':''}>${u.name}</option>`).join('')}</select></label><label>Date<input type="date" name="date" value="${date||iso(now)}"></label><label>Début<input type="time" name="start" value="18:00"></label><label>Fin<input type="time" name="end" value="01:00"></label><label>Type<select name="type"><option value="work">Travail</option><option value="absence">Absence</option></select></label><label>Note<input name="note" placeholder="Bar, salle, renfort..."></label><div class="full"><button class="btn gold">Enregistrer</button></div></form></div></div></div>`;render()
+}
+function saveShift(e){e.preventDefault();const f=new FormData(e.target);state.shifts.push({id:uid(),userId:f.get('userId'),date:f.get('date'),start:f.get('start'),end:f.get('end'),type:f.get('type'),note:f.get('note')});modal='';save()}
+
+function openUser(){
+ modal=`<div class="modal-back" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-head"><h3>Ajouter à l’équipe</h3><button class="mini" onclick="closeModal()">Fermer</button></div><div class="modal-body"><form class="form-grid" onsubmit="saveUser(event)"><label>Prénom<input name="name" required></label><label>Rôle<select name="role"><option value="employee">Employé</option><option value="extra">Extra</option><option value="admin">Admin</option></select></label><div class="full"><button class="btn gold">Ajouter</button></div></form></div></div></div>`;render()
+}
+function saveUser(e){e.preventDefault();const f=new FormData(e.target);state.users.push({id:uid(),name:String(f.get('name')).toUpperCase(),role:f.get('role'),active:true});modal='';save()}
+
+function openProduct(){
+ modal=`<div class="modal-back" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-head"><h3>Nouveau produit</h3><button class="mini" onclick="closeModal()">Fermer</button></div><div class="modal-body"><form class="form-grid" onsubmit="saveProduct(event)"><label>Produit<input name="name" required></label><label>Catégorie<select name="category"><option>Bières</option><option>Alcools</option><option>Softs</option><option>Vins</option><option>Consommables</option></select></label><label>Unité<select name="unit"><option>bouteilles</option><option>cartons</option><option>fûts</option><option>packs</option><option>unités</option></select></label><label>Quantité<input type="number" step=".01" name="qty" value="0"></label><label>Seuil<input type="number" step=".01" name="min" value="1"></label><label>Fournisseur<select name="supplier"><option>COZIGOU</option><option>METRO</option><option>AUTRE</option></select></label><label>Prix achat<input type="number" step=".01" name="buy" value="0"></label><div class="full"><button class="btn gold">Ajouter</button></div></form></div></div></div>`;render()
+}
+function saveProd
