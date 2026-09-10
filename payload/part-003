@@ -1,0 +1,30 @@
+uct(e){e.preventDefault();const f=new FormData(e.target);state.stock.push({id:uid(),name:f.get('name'),category:f.get('category'),unit:f.get('unit'),qty:+f.get('qty'),min:+f.get('min'),supplier:f.get('supplier'),buy:+f.get('buy')});modal='';save()}
+
+function adjustStock(id){
+ const p=state.stock.find(x=>x.id===id);
+ modal=`<div class="modal-back" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-head"><h3>${p.name}</h3><button class="mini" onclick="closeModal()">Fermer</button></div><div class="modal-body"><form class="form-grid" onsubmit="saveAdjust(event,'${id}')"><label>Nouvelle quantité<input type="number" step=".01" name="qty" value="${p.qty}"></label><label>Motif<select name="reason"><option>Inventaire</option><option>Entrée</option><option>Sortie</option><option>Casse</option><option>Perte</option></select></label><div class="full"><button class="btn gold">Valider</button></div></form></div></div></div>`;render()
+}
+function saveAdjust(e,id){e.preventDefault();const f=new FormData(e.target);const p=state.stock.find(x=>x.id===id);const before=+p.qty;p.qty=+f.get('qty');state.stockLog.push({id:uid(),productId:id,before,after:p.qty,reason:f.get('reason'),at:new Date().toISOString(),userId:me().id});modal='';save()}
+
+function openInventory(){
+ modal=`<div class="modal-back" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-head"><h3>Inventaire express</h3><button class="mini" onclick="closeModal()">Fermer</button></div><div class="modal-body"><form onsubmit="saveInventory(event)">${state.stock.map(p=>`<label style="margin-bottom:10px">${p.name}<input type="number" step=".01" name="${p.id}" value="${p.qty}"></label>`).join('')}<button class="btn gold">Enregistrer l’inventaire</button></form></div></div></div>`;render()
+}
+function saveInventory(e){e.preventDefault();const f=new FormData(e.target);state.stock.forEach(p=>{const before=+p.qty,after=+f.get(p.id);if(before!==after){p.qty=after;state.stockLog.push({id:uid(),productId:p.id,before,after,reason:'Inventaire',at:new Date().toISOString(),userId:me().id})}});modal='';save()}
+
+function openRequest(){
+ modal=`<div class="modal-back" onclick="if(event.target===this)closeModal()"><div class="modal"><div class="modal-head"><h3>Nouvelle demande</h3><button class="mini" onclick="closeModal()">Fermer</button></div><div class="modal-body"><form class="form-grid" onsubmit="saveRequest(event)">
+  ${admin()?`<label>Personne<select name="userId">${state.users.map(u=>`<option value="${u.id}">${u.name}</option>`).join('')}</select></label>`:''}
+  <label>Type<select name="kind"><option>Disponibilité</option><option>Indisponibilité</option><option>Absence</option><option>Remplacement</option></select></label><label>Date<input type="date" name="date" value="${iso(now)}"></label><label class="full">Commentaire<textarea name="note" rows="3"></textarea></label><div class="full"><button class="btn gold">Envoyer</button></div></form></div></div></div>`;render()
+}
+function saveRequest(e){e.preventDefault();const f=new FormData(e.target);state.requests.push({id:uid(),userId:admin()?f.get('userId'):me().id,kind:f.get('kind'),date:f.get('date'),note:f.get('note'),status:admin()?'accepted':'pending'});modal='';save()}
+
+function closeModal(){modal='';render()}
+
+function render(){
+ const root=document.getElementById('root');
+ if(!state.currentUserId){root.innerHTML=loginScreen();return}
+ let body=view==='home'?homePage():view==='planning'?planningPage():view==='stock'?stockPage():view==='team'?teamPage():morePage();
+ root.innerHTML=`<div class="app-shell">${header()}<div class="content">${body}</div>${nav()}${modal||''}</div>`;
+}
+render();
+</script></body></html>
